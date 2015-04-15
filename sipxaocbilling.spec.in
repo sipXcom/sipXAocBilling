@@ -1,9 +1,9 @@
-Name: iant-aoc-billing
-Version: 14.10
-Release: 14117.0001
+Name: @PACKAGE@
+Version: @VERSION@
+Release: @PACKAGE_REVISION@
 
 Summary: iant-aoc-billing
-License: Commercial
+License: LGPL
 Group: Telcommunications
 Vendor: IANT GmbH
 Packager: IANT GmbH <info@iant.de>
