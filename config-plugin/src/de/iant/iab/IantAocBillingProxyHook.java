@@ -1,6 +1,6 @@
-/**
+/*
  *
- * Copyright (C) 2014 eZuce Inc.
+ * Copyright (C) 2015 eZuce Inc.
  *
  */
 package de.iant.iab;
