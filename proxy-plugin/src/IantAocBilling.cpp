@@ -31,6 +31,8 @@
 #include <mongo/client/connpool.h>
 #include <mongo/client/dbclient.h>
 #include <mongo/client/dbclient_rs.h>
+#include "sipdb/MongoDB.h"
+#include "sipdb/MongoMod.h"
 
 static const int SIPX_PLUGIN_PRIORITY = 991;
 static const std::string COLLECTION_IANT_BILLING = "iant_billing";
