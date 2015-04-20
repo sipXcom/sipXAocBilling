@@ -31,7 +31,6 @@
 #include <mongo/client/connpool.h>
 #include <mongo/client/dbclient.h>
 #include <mongo/client/dbclient_rs.h>
-#include "sipdb/MongoDB.h"
 #include "sipdb/MongoMod.h"
 
 static const int SIPX_PLUGIN_PRIORITY = 991;
@@ -118,7 +117,7 @@ std::string IantAocBilling::aocParser(std::string xml)
 void IantAocBilling::insertDataToMongoDb(UtlString callId, UtlString amount)
 {
     OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: "<< "CallID: "<<callId << " Amount: "<< amount << " Timeout is "<<  getReadQueryTimeout());
-    MongoDB::ScopedDbConnectionPtr conn(mongoMod::ScopedDbConnection::getScopedDbConnection(_info.getConnectionString(), getReadQueryTimeout()));
+    MongoDB::ScopedDbConnectionPtr conn(mongoMod::ScopedDbConnection::getScopedDbConnection(_info.getConnectionString().toString(), getReadQueryTimeout()));
     mongo::DBClientBase* dbc = conn->get();
 
     try
