@@ -25,26 +25,28 @@ extern "C" SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString
 class IantAocBilling : public SipBidirectionalProcessorPlugin, MongoDB::BaseDB
 {
 public:
-  /// destructor
-  virtual ~IantAocBilling();
+	/// destructor
+	virtual ~IantAocBilling();
 
-  virtual void initialize();
+	virtual void initialize();
 
-  virtual void readConfig( OsConfigDb& configDb  );
+	virtual void readConfig( OsConfigDb& configDb  );
 
-  virtual void handleIncoming(SipMessage& message, const char* address, int port);
+	virtual void handleIncoming(SipMessage& message, const char* address, int port);
 
-  virtual void handleOutgoing(SipMessage& message, const char* address, int port);
+	virtual void handleOutgoing(SipMessage& message, const char* address, int port);
 
-  std::string aocParser(std::string xml);
-  std::string getAmount(std::string xml);
-  void insertDataToMongoDb(UtlString callId, UtlString amount);
-  bool checkContentLengthAndType(SipMessage& message);
-  void parseInformationsFromSipMessage(SipMessage& message);
-  
+private:
+	std::string aocParser(const std::string& xml);
+	std::string getAmount(const std::string& xml);
+	void insertDataToMongoDb(const UtlString& callId, const UtlString& amount);
+	bool checkContentType(SipMessage& message);
+	void parseInformationsFromSipMessage(SipMessage& message);
+	boost::regex regExAmount;
+
 protected:
-  IantAocBilling(const UtlString& instanceName, int priority, const MongoDB::ConnectionInfo& info);
-  friend SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
+	IantAocBilling(const UtlString& instanceName, int priority, const MongoDB::ConnectionInfo& info);
+	friend SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
 };
 
 #endif // IantAocBilling_H_INCLUDED
