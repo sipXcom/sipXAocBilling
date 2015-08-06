@@ -188,7 +188,8 @@ void IantAocBilling::insertDataToMongoDb(const UtlString& callId, const UtlStrin
 		if(oldAmount<newAmount)
 		{
 			OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Valid Amount ");
-			mongo::BSONObj data = BSON("_id" << callId.str() << "amount" << amount.str());
+			time_t ct = time(0);
+			mongo::BSONObj data = BSON("_id" << callId.str() << "amount" << amount.str() << "lastupdate" << ctime(&ct));
 			dbc->update(NAMESPACE_IANT_BILLING + "." + COLLECTION_IANT_BILLING, query, data, true);
 		}
 		else
