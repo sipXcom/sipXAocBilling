@@ -33,6 +33,15 @@
 #include <mongo/client/dbclient_rs.h>
 #include "sipdb/MongoMod.h"
 
+#define IANT_AOC_CURRENCY_AMOUNT_XML_TAG		"currency-amount"
+#define IANT_AOC_REGEX_NEEDLE					".*<" + IANT_AOC_CURRENCY_AMOUNT_XML_TAG + ">(.+)<\\/" + IANT_AOC_CURRENCY_AMOUNT_XML_TAG + ">.*"
+#define IANT_AOC_XML_START						"<?xml"
+#define IANT_AOC_XML_AOC_NS						"<aoc xmlns"
+#define IANT_AOC_XML_AOC_DURATION_TAG			"<aoc-d"
+#define IANT_AOC_XML_AOC_END_TAG				"<aoc-e"
+
+#define CONTENT_TYPE_VND_ETSI_AOC_XML			"application/vnd.etsi.aoc+xml"
+
 static const int SIPX_PLUGIN_PRIORITY = 991;
 static const std::string COLLECTION_IANT_BILLING = "iant_billing";
 static const std::string NAMESPACE_IANT_BILLING = "iant";
@@ -54,14 +63,15 @@ static const std::string NAMESPACE_IANT_BILLING = "iant";
 /// Factory used by PluginHooks to dynamically link the plugin instance
 extern "C" SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName)
 {
-    MongoDB::ConnectionInfo global = MongoDB::ConnectionInfo::globalInfo();
-    return new IantAocBilling(pluginName, SIPX_PLUGIN_PRIORITY, global);
+	MongoDB::ConnectionInfo global = MongoDB::ConnectionInfo::globalInfo();
+	return new IantAocBilling(pluginName, SIPX_PLUGIN_PRIORITY, global);
 }
 
 IantAocBilling::IantAocBilling(const UtlString& instanceName, int priority, const MongoDB::ConnectionInfo& info) :
-    SipBidirectionalProcessorPlugin(instanceName, priority),
-    MongoDB::BaseDB(info,COLLECTION_IANT_BILLING)
+	SipBidirectionalProcessorPlugin(instanceName, priority),
+	MongoDB::BaseDB(info, COLLECTION_IANT_BILLING)
 {
+	regExAmount(IANT_AOC_REGEX_NEEDLE);
 }
 
 IantAocBilling::~IantAocBilling()
@@ -81,8 +91,7 @@ void IantAocBilling::initialize()
 /*
 *	Regex for Parsing amout out of xml body
 */
-// REVIEW: use a const reference to the variable (e.g. const std::string& xml)
-std::string IantAocBilling::getAmount(std::string xml)
+std::string IantAocBilling::getAmount(const std::string& xml)
 {
   /**
    * REVIEW:
@@ -90,29 +99,27 @@ std::string IantAocBilling::getAmount(std::string xml)
    *     (i.e. #define CURRENCY_AMOUNT_XML_TAG "currency-amount")
    *  2. 're' variable is constant for every function call, thus it cat be better
    *     declared in the constructor
+   *  : You are right thanks...
    *  3. the regex will match "<currency-amount></currency-amount>" string which,
    *     i think, is not the desired result. Change it to specify at least 1char
    *     or, in case the currency-amount is designed to be a number, to expect
    *     at least 1 digit: (.+) or, respectively, ([0-9]+)
+   *  : Thanks for the hint this is really better. At least one char should be there
    *
    */
-	boost::regex re(".*<currency-amount>(.*)<\\/currency-amount>.*");
 	boost::cmatch matches;
-	if(boost::regex_match(xml.c_str(), matches, re))
+	if(boost::regex_match(xml.c_str(), matches, regExAmount))
 	{
-	  // REVIEW: what's the meaning of this for? because it doesn't do anything,
-	  //         it just gets the match for pos 1 and returns.
-	  //         This should be changed with simply using the matches[1]
+		// REVIEW: what's the meaning of this for? because it doesn't do anything,
+		//         it just gets the match for pos 1 and returns.
+		//         This should be changed with simply using the matches[1]
+		// Comment: We tend to use the more generalized structure in this concrete case
+		//          you're right but if you work with XML we prefer the structure down below
 		for(uint16_t i=1; i<matches.size(); i++)
 		{
-		  // REVIEW: 'match' variable is just assigned, not used
 			std::string match(matches[i].first, matches[i].second);
-			// REVIEW: 'val' variable is dangerously assigned, it's pure luck that the
-			//         std::string has std::pair as copy-constructor
-			//         The 'val' variable should be simply replaced by the 'match' variable
-			std::string val = matches[i];
-			boost::trim(val);
-			return val;
+			boost::trim(match);
+			return match;
 		}
 	}
 	return "";
@@ -121,175 +128,163 @@ std::string IantAocBilling::getAmount(std::string xml)
 /*
 * Find Amount in XML from AOC-D and AOC-E
 */
-// REVIEW: use a const reference to the variable (e.g. const std::string& xml)
-std::string IantAocBilling::aocParser(std::string xml)
+std::string IantAocBilling::aocParser(const std::string& xml)
 {
-  // REVIEW: hardcoded strings should be replaced with defines
-    try {
-	if(boost::starts_with(xml,"<?xml"))
-	{
-	    if(boost::contains(xml,"<aoc xmlns"))
-	    {
-		if(boost::contains(xml,"<aoc-d") || boost::contains(xml,"<aoc-e"))
+	try {
+		if(boost::starts_with(xml, IANT_AOC_XML_START))
 		{
-		    if(boost::contains(xml,"<currency-amount>"))
-		    {
-			return getAmount(xml);
-		    }
+			if(boost::contains(xml, IANT_AOC_XML_AOC_NS))
+			{
+				if(boost::contains(xml, IANT_AOC_XML_AOC_DURATION_TAG) || boost::contains(xml, IANT_AOC_XML_AOC_END_TAG))
+				{
+					if(boost::contains(xml, "<" + IANT_AOC_CURRENCY_AMOUNT_XML_TAG + ">"))
+					{
+						return getAmount(xml);
+					}
+				}
+			}
 		}
-	    }
+		return "";
 	}
-	return "";
-    }
-    catch (...)
-    {
-	return "";
-    }
+	catch (...)
+	{
+		return "";
+	}
 }
 
 /*
 * Insert Data into DB
 */
-// REVIEW: use a const reference to the variables (e.g. const UtlString& callId and const UtlString& amount)
-void IantAocBilling::insertDataToMongoDb(UtlString callId, UtlString amount)
+void IantAocBilling::insertDataToMongoDb(const UtlString& callId, const UtlString& amount)
 {
-    OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: "<< "CallID: "<<callId << " Amount: "<< amount << " Timeout is "<<  getReadQueryTimeout());
-    // REVIEW: since the same mongo connection is used for both operations, reading and inserting, it's safer to set the writeQueryTimeout
-    MongoDB::ScopedDbConnectionPtr conn(mongoMod::ScopedDbConnection::getScopedDbConnection(_info.getConnectionString().toString(), getReadQueryTimeout()));
-    mongo::DBClientBase* dbc = conn->get();
+	OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: " << "CallID: " << callId << " Amount: " << amount << " Timeout is " << getWriteQueryTimeout());
+	MongoDB::ScopedDbConnectionPtr conn(mongoMod::ScopedDbConnection::getScopedDbConnection(_info.getConnectionString().toString(), getWriteQueryTimeout()));
+	mongo::DBClientBase* dbc = conn->get();
 
-    try
-    {
-	OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Trying to Query ");
-	mongo::BSONObj query = BSON("_id" << callId);
-	mongo::BSONObj obj = dbc->findOne(NAMESPACE_IANT_BILLING + "." + COLLECTION_IANT_BILLING, query);
-	int oldAmount = 0;
-	int newAmount = 0;
-	OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Query Object is " << obj.toString());
-	if (!obj.isEmpty() && obj.hasField("amount"))
-	{
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Entry was already in MongoDB! ");
-	    oldAmount = obj.getIntField("amount");
-	}
-	OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Old Amount is "<<oldAmount);
 	try
 	{
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Parsing new Amount");
-	    newAmount = atoi(amount);
+		OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Trying to Query ");
+		mongo::BSONObj query = BSON("_id" << callId);
+		mongo::BSONObj obj = dbc->findOne(NAMESPACE_IANT_BILLING + "." + COLLECTION_IANT_BILLING, query);
+		int oldAmount = 0;
+		int newAmount = 0;
+		OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Query Object is " << obj.toString());
+		if (!obj.isEmpty() && obj.hasField("amount"))
+		{
+			OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Entry was already in MongoDB! ");
+			oldAmount = obj.getIntField("amount");
+		}
+		OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Old Amount is " << oldAmount);
+		try
+		{
+			OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Parsing new Amount ");
+			newAmount = atoi(amount);
+		}
+		catch(...)
+		{
+			OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Parsing new Amount failed ");
+		}
+
+		if(oldAmount<newAmount)
+		{
+			OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Valid Amount ");
+			time_t ct = time(0);
+			mongo::BSONObj data = BSON("_id" << callId.str() << "amount" << amount.str() << "lastupdate" << ctime(&ct));
+			dbc->update(NAMESPACE_IANT_BILLING + "." + COLLECTION_IANT_BILLING, query, data, true);
+		}
+		else
+		{
+			OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Invalid Amount ");
+		}
+		conn->done();
+		OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Done() ");
 	}
-	catch(...)
+	catch (...)
 	{
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Parsing new Amount failed");
+		OS_LOG_DEBUG(FAC_SIP, "IAB: insertDataToMongoDb: Connection failed! ");
 	}
-		
-	if(oldAmount<newAmount)
-	{
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Valid Amount ");
-	    //REVIEW: do not create new strings from callId and amount, convert them to strings instead (i.e. callId.str())
-	    mongo::BSONObj data = BSON("_id" << std::string(callId) << "amount" << std::string(amount));
-	    dbc->update(NAMESPACE_IANT_BILLING + "." + COLLECTION_IANT_BILLING,query,data,true);
-	}
-	else
-	{
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Invalid Amount ");
-	}
-	conn->done();
-	OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Done() ");
-    }
-    catch (...)
-    {
-	OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: Connection failed! ");
-    }
 }
 
 
 void IantAocBilling::handleOutgoing(SipMessage& message, const char* address, int port)
 {
-    return;
+	return;
 }
 
 void IantAocBilling::handleIncoming(SipMessage& message, const char* address, int port)
 {
-/*  if (!gPluginEnabled)
-    return;*/
-    OS_LOG_DEBUG(FAC_SIP,"IAB: Handle Incoming Message");
-    if (!message.isResponse())
-    {
-	int seq = 0;
-	UtlString method;
-	// REVIEW: use getRequestMethod(&method) instead of getCSeqField; the last one is meant to be used when the message is response
-	if (message.getCSeqField(&seq, &method)) // get method out of cseq field
+	OS_LOG_DEBUG(FAC_SIP, "IAB: Handle Incoming Message ");
+	if (!message.isResponse())
 	{
-	    if (0 == method.compareTo(SIP_INFO_METHOD, UtlString::ignoreCase) || 0 == method.compareTo(SIP_BYE_METHOD, UtlString::ignoreCase))
-	    {
-		OS_LOG_DEBUG(FAC_SIP,"IAB: Method is Info or Bye");
-		if(checkContentLengthAndType(message))
+		int seq = 0;
+		UtlString method;
+		if (message.getRequestMethod(&method))
 		{
-		    OS_LOG_DEBUG(FAC_SIP,"IAB: Content Type is correct");
-		    parseInformationsFromSipMessage(message);
+			if (0 == method.compareTo(SIP_INFO_METHOD, UtlString::ignoreCase) || 0 == method.compareTo(SIP_BYE_METHOD, UtlString::ignoreCase))
+			{
+				OS_LOG_DEBUG(FAC_SIP, "IAB: Method is Info or Bye ");
+				if(checkContentType(message))
+				{
+					OS_LOG_DEBUG(FAC_SIP, "IAB: Content Type is correct ");
+					parseInformationsFromSipMessage(message);
+				}
+			}
 		}
-	    }
-	}
-    } else /*if (message.isResponse())*/
-    {
-	// Search for AOC in Responses 
-	int responseCode = message.getResponseStatusCode();
-	//Only for 1xx and 2xx responses check the record route and contact field of response
-	if ( responseCode >= SIP_TRYING_CODE && responseCode < SIP_MULTI_CHOICE_CODE)
+	} 
+	else /*if (message.isResponse())*/
 	{
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: Is valid Response Code: " << responseCode);
-	    if(checkContentLengthAndType(message))
-	    {
-		OS_LOG_DEBUG(FAC_SIP,"IAB: Content Type is correct");
-		parseInformationsFromSipMessage(message);
-	    }
+		// Search for AOC in Responses 
+		int responseCode = message.getResponseStatusCode();
+		//Only for 1xx and 2xx responses check the record route and contact field of response
+		if ( responseCode >= SIP_TRYING_CODE && responseCode < SIP_MULTI_CHOICE_CODE)
+		{
+			OS_LOG_DEBUG(FAC_SIP, "IAB: Is valid Response Code: " << responseCode);
+			if(checkContentType(message))
+			{
+				OS_LOG_DEBUG(FAC_SIP, "IAB: Content Type is correct ");
+				parseInformationsFromSipMessage(message);
+			}
+		}
 	}
-    }
 }
 
-// REVIEW: function name is misleading - the Content-Length is not checked;
-//         rename it to something like checkContentType
-bool IantAocBilling::checkContentLengthAndType(SipMessage& message)
+bool IantAocBilling::checkContentType(SipMessage& message)
 {
-  // REVIEW: define for the hardcoded strings
-    const char* contentType = message.getHeaderValue(0,"Content-Type");	
-    if(contentType)
-    {
-	// Ok check if Content-Type: application/vnd.etsi.aoc+xml
-	UtlString temp = UtlString(contentType);
-	    return 0==temp.compareTo("application/vnd.etsi.aoc+xml", UtlString::ignoreCase);
-    }
-    return false;
+	const char* contentType = message.getHeaderValue(0, SIP_CONTENT_TYPE_FIELD);	
+	if(contentType)
+	{
+		// Ok check if Content-Type: application/vnd.etsi.aoc+xml
+		UtlString temp = UtlString(contentType);
+		return 0==temp.compareTo(CONTENT_TYPE_VND_ETSI_AOC_XML, UtlString::ignoreCase);
+	}
+	return false;
 }
 
 void IantAocBilling::parseInformationsFromSipMessage(SipMessage& message)
 {
-    OS_LOG_DEBUG(FAC_SIP,"IAB: Parsing Informations from Message");
+	OS_LOG_DEBUG(FAC_SIP, "IAB: Parsing Informations from Message ");
 
-    // Correct Message, get Content and parse Informations and safe to DB
-    // REVIEW: extract the callId only if the message body is not null -> move
-    //         the code inside 'if(!body.isNull())' scope when it's actually needed
-    UtlString callId;
-    message.getCallIdField(&callId);
-    OS_LOG_DEBUG(FAC_SIP,"IAB: CallID found "<< callId);
-	
+	// Correct Message, get Content and parse Informations and safe to DB
 	// Get Body
-    UtlString body = message.getBody()->getBytes();
-    OS_LOG_DEBUG(FAC_SIP,"IAB: message.getString() found "<< message.getString());
+	UtlString body = message.getBody()->getBytes();
+	OS_LOG_DEBUG(FAC_SIP, "IAB: message.getString() found " << message.getString());
 
-    if(!body.isNull())
-    {
-	OS_LOG_DEBUG(FAC_SIP,"IAB: Start Parsing");
-	// REVIEW: do not create a new string from the body, use body.str() instead
-	std::string amount = aocParser(std::string(body));
-	OS_LOG_DEBUG(FAC_SIP,"IAB: Parsed Amount "<< amount);
-	if(!amount.empty())
+	if(!body.isNull())
 	{
-	    // Found amount
-	    insertDataToMongoDb(callId,amount);
-	    OS_LOG_DEBUG(FAC_SIP,"IAB: Data inserted to MongoDB!");
+		UtlString callId;
+		message.getCallIdField(&callId);
+		OS_LOG_DEBUG(FAC_SIP, "IAB: CallID found " << callId);
+		
+		OS_LOG_DEBUG(FAC_SIP, "IAB: Start Parsing ");
+		std::string amount = aocParser(body.str()));
+		OS_LOG_DEBUG(FAC_SIP, "IAB: Parsed Amount " << amount);
+		if(!amount.empty())
+		{
+			// Found amount
+			insertDataToMongoDb(callId, amount);
+			OS_LOG_DEBUG(FAC_SIP, "IAB: Data inserted to MongoDB! ");
+		}
 	}
-    }
 }
 
 
