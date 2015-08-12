@@ -20,33 +20,40 @@
 #include <string>
 #include <net/SipMessage.h>
 
+#define AOC_CURRENCY_AMOUNT "<currency-amount>"
+#define AOC_CURRENCY_REGEX ".*<currency-amount>(.+)<\\/currency-amount>.*"
+#define AOC_XML_TAG "<?xml"
+#define AOC_NS "<aoc xmlns"
+#define AOC_D "<aoc-d"
+#define AOC_E "<aoc-e"
+#define AOC_ETSI_HEADER "application/vnd.etsi.aoc+xml"
+#define AOC_CONTENT_TYPE "Content-Type"
+
 extern "C" SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
 
 class IantAocBilling : public SipBidirectionalProcessorPlugin, MongoDB::BaseDB
 {
 public:
-	/// destructor
-	virtual ~IantAocBilling();
+  /// destructor
+  virtual ~IantAocBilling();
 
-	virtual void initialize();
+  virtual void initialize();
 
-	virtual void readConfig( OsConfigDb& configDb  );
+  virtual void readConfig( OsConfigDb& configDb  );
 
-	virtual void handleIncoming(SipMessage& message, const char* address, int port);
+  virtual void handleIncoming(SipMessage& message, const char* address, int port);
 
-	virtual void handleOutgoing(SipMessage& message, const char* address, int port);
+  virtual void handleOutgoing(SipMessage& message, const char* address, int port);
 
-private:
-	std::string aocParser(const std::string& xml);
-	std::string getAmount(const std::string& xml);
-	void insertDataToMongoDb(const UtlString& callId, const UtlString& amount);
-	bool checkContentType(SipMessage& message);
-	void parseInformationsFromSipMessage(SipMessage& message);
-	boost::regex regExAmount;
-
+  std::string aocParser(const std::string xml);
+  std::string getAmount(const std::string xml);
+  void insertDataToMongoDb(const UtlString callId, const UtlString amount, const UtlString fromField, const UtlString toField);
+  bool checkContentType(const SipMessage& message);
+  void parseInformationsFromSipMessage(const SipMessage& message);
+  
 protected:
-	IantAocBilling(const UtlString& instanceName, int priority, const MongoDB::ConnectionInfo& info);
-	friend SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
+  IantAocBilling(const UtlString& instanceName, int priority, const MongoDB::ConnectionInfo& info);
+  friend SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
 };
 
 #endif // IantAocBilling_H_INCLUDED
