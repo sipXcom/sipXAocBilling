@@ -67,8 +67,7 @@ void IantAocBilling::initialize()
 /*
 *	Regex for Parsing amout out of xml body
 */
-// REVIEW: use a const reference to the variable (e.g. const std::string& xml)
-std::string IantAocBilling::getAmount(std::string xml)
+std::string IantAocBilling::getAmount(const std::string xml)
 {
 	boost::regex re(AOC_CURRENCY_REGEX);
 	boost::cmatch matches;
@@ -85,10 +84,8 @@ std::string IantAocBilling::getAmount(std::string xml)
 /*
 * Find Amount in XML from AOC-D and AOC-E
 */
-// REVIEW: use a const reference to the variable (e.g. const std::string& xml)
-std::string IantAocBilling::aocParser(std::string xml)
+std::string IantAocBilling::aocParser(const std::string xml)
 {
-  // REVIEW: hardcoded strings should be replaced with defines
     try 
 	{
         if(boost::starts_with(xml,AOC_XML_TAG))
@@ -115,7 +112,7 @@ std::string IantAocBilling::aocParser(std::string xml)
 /*
 * Insert Data into DB
 */
-void IantAocBilling::insertDataToMongoDb(UtlString callId, UtlString amount, UtlString fromField, UtlString toField)
+void IantAocBilling::insertDataToMongoDb(const UtlString callId, const UtlString amount, const UtlString fromField, const UtlString toField)
 {
     OS_LOG_DEBUG(FAC_SIP,"IAB: insertDataToMongoDb: "<< "CallID: "<<callId << " Amount: "<< amount << " Timeout is "<<  getWriteQueryTimeout());
     MongoDB::ScopedDbConnectionPtr conn(mongoMod::ScopedDbConnection::getScopedDbConnection(_info.getConnectionString().toString(), getWriteQueryTimeout()));
@@ -173,8 +170,6 @@ void IantAocBilling::handleOutgoing(SipMessage& message, const char* address, in
 
 void IantAocBilling::handleIncoming(SipMessage& message, const char* address, int port)
 {
-/*  if (!gPluginEnabled)
-    return;*/
     OS_LOG_DEBUG(FAC_SIP,"IAB: Handle Incoming Message");
     if (!message.isResponse())
     {
@@ -194,7 +189,7 @@ void IantAocBilling::handleIncoming(SipMessage& message, const char* address, in
 	{
 	    // Search for AOC in Responses 
 	    int responseCode = message.getResponseStatusCode();
-	    //Only for 1xx and 2xx responses check the record route and contact field of response
+	    // Only for 1xx and 2xx responses check the record route and contact field of response
 	    if ( responseCode >= SIP_TRYING_CODE && responseCode < SIP_MULTI_CHOICE_CODE)
 	    {
 	        OS_LOG_DEBUG(FAC_SIP,"IAB: Is valid Response Code: " << responseCode);
@@ -207,10 +202,9 @@ void IantAocBilling::handleIncoming(SipMessage& message, const char* address, in
     }
 }
 
-bool IantAocBilling::checkContentType(SipMessage& message)
+bool IantAocBilling::checkContentType(const SipMessage& message)
 {
-  // REVIEW: define for the hardcoded strings
-    const char* contentType = message.getHeaderValue(0,"Content-Type");	
+    const char* contentType = message.getHeaderValue(0,AOC_CONTENT_TYPE);	
     if(contentType)
     {
 	    // Ok check if Content-Type: application/vnd.etsi.aoc+xml
@@ -220,7 +214,7 @@ bool IantAocBilling::checkContentType(SipMessage& message)
     return false;
 }
 
-void IantAocBilling::parseInformationsFromSipMessage(SipMessage& message)
+void IantAocBilling::parseInformationsFromSipMessage(const SipMessage& message)
 {
     OS_LOG_DEBUG(FAC_SIP,"IAB: Parsing Informations from Message");
     // Correct Message, get Content and parse Informations and safe to DB

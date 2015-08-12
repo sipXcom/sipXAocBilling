@@ -27,6 +27,7 @@
 #define AOC_D "<aoc-d"
 #define AOC_E "<aoc-e"
 #define AOC_ETSI_HEADER "application/vnd.etsi.aoc+xml"
+#define AOC_CONTENT_TYPE "Content-Type"
 
 extern "C" SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
 
@@ -44,11 +45,11 @@ public:
 
   virtual void handleOutgoing(SipMessage& message, const char* address, int port);
 
-  std::string aocParser(std::string xml);
-  std::string getAmount(std::string xml);
-  void insertDataToMongoDb(UtlString callId, UtlString amount, UtlString fromField, UtlString toField);
-  bool checkContentType(SipMessage& message);
-  void parseInformationsFromSipMessage(SipMessage& message);
+  std::string aocParser(const std::string xml);
+  std::string getAmount(const std::string xml);
+  void insertDataToMongoDb(const UtlString callId, const UtlString amount, const UtlString fromField, const UtlString toField);
+  bool checkContentType(const SipMessage& message);
+  void parseInformationsFromSipMessage(const SipMessage& message);
   
 protected:
   IantAocBilling(const UtlString& instanceName, int priority, const MongoDB::ConnectionInfo& info);
