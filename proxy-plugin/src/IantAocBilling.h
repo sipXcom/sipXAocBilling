@@ -20,6 +20,14 @@
 #include <string>
 #include <net/SipMessage.h>
 
+#define AOC_CURRENCY_AMOUNT "<currency-amount>"
+#define AOC_CURRENCY_REGEX ".*<currency-amount>(.+)<\\/currency-amount>.*"
+#define AOC_XML_TAG "<?xml"
+#define AOC_NS "<aoc xmlns"
+#define AOC_D "<aoc-d"
+#define AOC_E "<aoc-e"
+#define AOC_ETSI_HEADER "application/vnd.etsi.aoc+xml"
+
 extern "C" SipBidirectionalProcessorPlugin* getTransactionPlugin(const UtlString& pluginName);
 
 class IantAocBilling : public SipBidirectionalProcessorPlugin, MongoDB::BaseDB
@@ -38,8 +46,8 @@ public:
 
   std::string aocParser(std::string xml);
   std::string getAmount(std::string xml);
-  void insertDataToMongoDb(UtlString callId, UtlString amount);
-  bool checkContentLengthAndType(SipMessage& message);
+  void insertDataToMongoDb(UtlString callId, UtlString amount, UtlString fromField, UtlString toField);
+  bool checkContentType(SipMessage& message);
   void parseInformationsFromSipMessage(SipMessage& message);
   
 protected:
